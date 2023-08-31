@@ -28,7 +28,7 @@ This wrapper struct has helper functions like `Load()` and `Store()` which add m
 concurrent accesses by threads.
 
 For parallelization, the number of threads is configurable using the `viper` package to read a `config.yaml` file.
-If no config file is present, the default value of 1 thread will be used.
+If no config file is present, the default value of 1 thread will be used. A default config file is provided, using 10 threads.
 
 Note: 
 
