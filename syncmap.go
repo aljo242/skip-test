@@ -69,6 +69,7 @@ func (rm *SyncMap) NumEntries(keyA string) int {
 	rm.RUnlock()
 	return l
 }
+
 func (rm *SyncMap) IncrementCountUnsafe(keyA, keyB string) {
 	val, ok := rm.internal[keyA][keyB]
 	if !ok {
