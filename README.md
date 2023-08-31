@@ -34,7 +34,8 @@ Note:
 
 To support odd numbers of threads or tokens, overflow is handled during parallelization.
 
-Final Display using 10 threads:
+### Final Display using 10 threads:
+
 ```shell
 2023/08/31 12:15:51  Displaying Top 5 Tokens... 
 2023/08/31 12:15:51  ID: 6088, Rarity: 0.008560
@@ -48,4 +49,13 @@ Final Display using 10 threads:
 2023/08/31 12:15:51  ID: 9224, Rarity: 0.007547
 
 ```
+
+## Remaining Work
+
+- Testing functions and creating an e2e test to verify behavior
+- Parallelize the sorting portion of the code using a parallel sort algorithm
+- Fixing all lint issues with the code (especially moving from deprecated `io/ioutil` package)
+- Setting up CI
+
+
 
