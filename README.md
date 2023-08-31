@@ -56,6 +56,7 @@ To support odd numbers of threads or tokens, overflow is handled during parallel
 - Parallelize the sorting portion of the code using a parallel sort algorithm
 - Fixing all lint issues with the code (especially moving from deprecated `io/ioutil` package)
 - Setting up CI
+- Reorganizing code so that `syncmap` is in another package
 
 
 
