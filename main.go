@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sort"
 	"sync"
 )
 
@@ -23,18 +24,13 @@ var logger = log.New(os.Stdout, "", log.Ldate|log.Ltime)
 var maxThreads = 1
 
 type AttrsMap struct {
-	attrTotalCounts map[string]int            // attribute to total number of possible values (how many possible values are there for "hat"?)
-	attrCounts      map[string]map[string]int // attribute to number of occurrences (how many times does "green beret" occur for "hat"?)
+	attrCounts *SyncMap // attribute to number of occurrences (how many times does "green beret" occur for "hat"?)
 }
 
 type Token struct {
-	id    int
-	attrs map[string]string
-}
-
-type RarityScorecard struct {
-	rarity float64
 	id     int
+	attrs  map[string]string
+	rarity float64
 }
 
 type Collection struct {
@@ -66,26 +62,36 @@ func getToken(tid int, colUrl string) *Token {
 func getTokens(col Collection) ([]*Token, AttrsMap) {
 	tokens := make([]*Token, col.count)
 	attrsMap := AttrsMap{
-		attrTotalCounts: make(map[string]int),
-		attrCounts:      make(map[string]map[string]int),
+		attrCounts: NewSyncMap(),
 	}
 
 	var wg sync.WaitGroup
 
 	numBuckets := maxThreads
 	bucketSize := col.count / maxThreads
+	overflow := len(tokens) % maxThreads
 
 	for offset := 0; offset < numBuckets; offset++ {
 		offset := offset
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for bucket := 0; bucket < bucketSize; bucket++ {
+
+			// handle any overflow in the last "bucket"
+			bucketWithOverflow := bucketSize
+			if offset == numBuckets-1 {
+				bucketWithOverflow += overflow
+			}
+
+			for bucket := 0; bucket < bucketWithOverflow; bucket++ {
 				index := offset*bucketSize + bucket
 				logger.Println(COLOR_GREEN, fmt.Sprintf("Getting token %d", index), COLOR_RESET)
 				tokens[index] = getToken(index, col.url)
 
 				// process to map
+				for key, attr := range tokens[index].attrs {
+					attrsMap.attrCounts.IncrementCount(key, attr)
+				}
 			}
 		}()
 	}
@@ -111,8 +117,59 @@ func readConfig() {
 	logger.Println(COLOR_GREEN, fmt.Sprintf("using %d threads...", maxThreads))
 }
 
-func processScores([]*Token, AttrsMap) {
+func processRarity(token *Token, attrsMap AttrsMap) float64 {
+	rarity := 0.0
 
+	// rarity += 1 / (count_with_value * num_values_in_category
+
+	for key, attr := range token.attrs {
+		numEntries := attrsMap.attrCounts.NumEntries(key)
+		attrOccurances, _ := attrsMap.attrCounts.Load(key, attr)
+
+		rarity += 1.0 / float64(numEntries*attrOccurances)
+	}
+
+	return rarity
+}
+
+func processScores(tokens []*Token, attrsMap AttrsMap) {
+	var wg sync.WaitGroup
+
+	numBuckets := maxThreads
+	bucketSize := len(tokens) / maxThreads
+	overflow := len(tokens) % maxThreads
+
+	for offset := 0; offset < numBuckets; offset++ {
+		offset := offset
+		wg.Add(1)
+		go func() {
+
+			defer wg.Done()
+
+			// handle any overflow in the last "bucket"
+			bucketWithOverflow := bucketSize
+			if offset == numBuckets-1 {
+				bucketWithOverflow += overflow - 1
+			}
+
+			for bucket := 0; bucket < bucketWithOverflow; bucket++ {
+				index := offset*bucketSize + bucket
+
+				// process score
+				tokens[index].rarity = processRarity(tokens[index], attrsMap)
+			}
+		}()
+	}
+
+	wg.Wait()
+
+}
+
+func sortTokens(tokens []*Token) {
+	// Sort by rarity, keeping original order or equal elements.
+	sort.SliceStable(tokens, func(i, j int) bool {
+		return tokens[i].rarity > tokens[j].rarity
+	})
 }
 
 func main() {
@@ -122,8 +179,15 @@ func main() {
 		count: 10000,
 		url:   "azuki1",
 	}
+
 	tokens, attrsMap := getTokens(azuki)
 	processScores(tokens, attrsMap)
+	sortTokens(tokens) // could use some kind of parallel sorting algorithm here
+
+	logger.Println(COLOR_GREEN, "Displaying Top 5 Tokens...", COLOR_RESET)
+	for i := range tokens[:5] {
+		logger.Println(COLOR_GREEN, fmt.Sprintf("ID: %d, Rarity: %.6f\n", tokens[i].id, tokens[i].rarity), COLOR_RESET)
+	}
 }
 
 // plan
